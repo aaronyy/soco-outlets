@@ -37,7 +37,7 @@ Here are basic rules of electrical outlet placement per the NEC rules:
 ![Allowable Configuration](https://raw.githubusercontent.com/SocialConstruct/outlets/master/png/allowable_configuration.png)
 
 ## Submittal
-Your solution should use the minimum number of outlets while satisfying all the rules above outlined above. Please submit a .zip file and make sure the following are part of your submission:
+Your solution should use the minimum number of outlets while satisfying all the rules above outlined above. Please submit a {your_name}.zip file and make sure the following are part of your submission:
 * **outlets.json** - a file containing the coordinates in WCS for outlet locations
 * **outlet_placer.py** - with your solution
 * **solution.md** - a brief explanation of what you did and why. There are some questions in there that are meant to act as guides rather than a "lab report"
