@@ -1,5 +1,6 @@
 # Solution
 * What was your approach? (This is meant to be an open ended question. We're looking for your thought process and how you went about solving this problem.)
+* What assumptions did you make?
 * Did you consider any other approaches and why did you decide not to use them?
 
 # Implementation
