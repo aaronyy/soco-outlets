@@ -1,5 +1,7 @@
 # Outlet Placer
 
+Thank you for taking the time to do our coding challenge. Below you'll find instructions and info you need to complete this exercise.
+
 One of the things we do at Social Construct is to programmatically create building details based on rough sketches of floor plans. In the following problem, you'll place outlets in a sample studio apartment according to rules of the 2017 National Electric Code on outlet spacing.
 
 ## Some Background
