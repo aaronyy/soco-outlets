@@ -58,6 +58,4 @@ You can use whatever open source libraries you think might be helpful in solving
 * Receptacle [spacing requirements](https://www.ecmag.com/section/codes-standards/article-210-branch-circuits-6) per the 2017 NEC, if you're curious about the rules. The relevant sections are 210.52(A)(1) and 210.52(A)(2)
 
 ## Other
-We provided an illustration of one sample solution, though there are many others that satisfy the constraints given. We don't expect you to arrive at this exact solution.
-
-Please don't spend too much time on this. Do not worry about symmetry or aesthetics of your final solution. We want to see how you think, and how you approach problems. We're looking for functional, readable code rather than perfection.
+We provided an illustration of one sample solution, though there are many others that satisfy the constraints given. We don't expect you to arrive at this exact solution. Do not worry about symmetry or aesthetics of your final solution. We want to see how you think, and how you approach problems. We're looking for functional, readable code rather than perfection.
