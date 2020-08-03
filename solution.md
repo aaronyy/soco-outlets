@@ -4,6 +4,7 @@
 * Did you consider any other approaches and why did you decide not to use them?
 
 # Implementation
+* What was the runtime of your algorithm?
 * What libraries did you add? What are they used for?
 * How long did you spend on this? If you had more time, what would you add?
 * What part are you most proud of and why?
