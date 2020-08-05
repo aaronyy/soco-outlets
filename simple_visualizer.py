@@ -16,7 +16,8 @@ _COLOR_TABLE = {
 	'kitchens': '#FFC65D',
 	'windows': '#93648D',
 	'debug': '#00ff00',
-	'debug2':'#00ff00'
+	'debug2':'#00ff00',
+	'outlets': '#00ff00'
 }
 
 def wcs2pix(x_coord, y_coord, min_coords, w, h, w2p_ratio, offset):
@@ -57,7 +58,7 @@ def main():
 	img = Image.fromarray(np.uint8(a))
 	viz = ImageDraw.Draw(img)
 
-	data = load_file_with_pixel_coords('json/debug.json')
+	data = load_file_with_pixel_coords('json/output_info.json')
 
 	for k in data:
 		for shape in data[k]['xy']:
