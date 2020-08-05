@@ -222,7 +222,6 @@ def get_walls_1d(room, cuts_1d):
 	""" Splice wall polygon into wall segments based on cut polygons projected into 1D space.
 		Return as 1D ranges that represent the wall segments.
 	"""
-
 	nec_walls_1d, current_pos, max_pos = [], 0, room.total_len
 	for cut in cuts_1d:
 		wall_start, wall_end = min(current_pos, cut[0]), cut[0]
