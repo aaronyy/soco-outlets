@@ -30,7 +30,7 @@ def load_file_with_pixel_coords(filepath):
 	data = json.load(f)
 	f.close()
 
-	vals = {dt:np.array(data[dt]) for dt in data.keys()}
+	vals = {dt:np.array(data[dt]) for dt in data.keys() if not 'pucks' in dt}
 
 	# get min/max for mapping
 	min_coords = np.amin([np.amin(np.amin(vals[k], axis=0), axis=0) for k in vals], axis=0)
@@ -43,6 +43,7 @@ def load_file_with_pixel_coords(filepath):
 	offset = (_W - (max_coords[0]-min_coords[0]) * 1/w2p_ratio) / 2 , (_H - (max_coords[1]-min_coords[1]) * 1/w2p_ratio) / 2
 
 	# convert to pix coords
+	vals = {dt:np.array(data[dt]) for dt in data.keys()}
 	for k in vals:
 		d = {
 			'raw': vals[k],

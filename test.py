@@ -204,22 +204,26 @@ class Outlet:
 # ==============================================================
 
 def get_wall_cuts_1d(room, categories_to_check):
+	""" Cut the room by doors and kitchen polygons.
+		Return the 1D projections on the room wall.
+	"""
 	wall_cuts_1d = []
 	for check in categories_to_check:
 		shapes = [[Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))] for r in read_data(_STUDIO_INFO_FILE, check)]
 		for shape in shapes:
 			for l in shape:
 				if room.overlaps(l):
-					pt1_1d = room.project_1d(l.p1)
-					pt2_1d = room.project_1d(l.p2)
+					pt1_1d, pt2_1d = room.project_1d(l.p1), room.project_1d(l.p2)
 					wall_cuts_1d.append((min(pt1_1d, pt2_1d), max(pt1_1d, pt2_1d)))
 	# reorder
 	return sorted(wall_cuts_1d, key=lambda x: x[0])
 
 def get_walls_1d(room, cuts_1d):
-	# splice wall polygon into wall segments based on checks
-	nec_walls_1d, current_pos, max_pos = [], 0, room.total_len
+	""" Splice wall polygon into wall segments based on cut polygons projected into 1D space.
+		Return as 1D ranges that represent the wall segments.
+	"""
 
+	nec_walls_1d, current_pos, max_pos = [], 0, room.total_len
 	for cut in cuts_1d:
 		wall_start, wall_end = min(current_pos, cut[0]), cut[0]
 		current_pos = cut[1]
@@ -234,14 +238,15 @@ def get_walls_1d(room, cuts_1d):
 	return nec_walls_1d
 
 def nec_walls_2d(room, walls_1d):
-	# NEC compliant wall segments, each an ordered list of line(s)
+	""" Unproject the 1D wall segment ranges back into 2D room space positions.
+		Returns NEC compliant wall segments, each an ordered list of line(s)
+	"""
 	nec_walls = [room.unproject_dist_2d(w[0], w[1]) for w in walls_1d]
 
-	# remember to merge last and first if connected
+	# remember to merge last and first if connected (loop)
 	if same(walls_1d[-1][1], room.total_len):
 		nec_walls[0] = nec_walls[-1] + nec_walls[0]
 		nec_walls = nec_walls[:-1]
-
 	return nec_walls
 
 # ==============================================================
@@ -250,22 +255,24 @@ def nec_walls_2d(room, walls_1d):
 # ==============================================================
 
 def generate_outlet(p1, p2, offset):
-	wall_pt = ((p1[0]+p2[0])/2, (p1[1]+p2[1])/2)
+	""" Helper to construct outlets with flushed center pts on wall and vertices.
+	"""
+	flushed_center = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
 	vertices = [p1, p2, (p2[0] + offset[0], p2[1] + offset[1]), (p1[0] + offset[0], p1[1] + offset[1])]
-	return Outlet(wall_pt, vertices)
+	return Outlet(flushed_center, vertices)
 
 def generate_all_outlets(nec_walls, room_polygon):
-	nec_lines = [line for wall in nec_walls for line in wall] # flatten
-
+	""" Generates all possible positions of outlets along NEC walls. Not necessarily valid.
+	"""
+	nec_walls_flatten = [line for wall in nec_walls for line in wall]
 	outlets = []
-	for line in nec_lines:
-
-		# get outlet offset when flushed to wall
+	for line in nec_walls_flatten:
+		# get outlet offset when flushed to wall, determine direction facing inside the room
 		ctr, offset = line.centroid, (0,0)
 
+		# using parallel lines to position offsets
 		left = line.parallel_offset(_OUTLET_DEPTH, 'left').centroid
 		right = line.parallel_offset(_OUTLET_DEPTH, 'right').centroid
-
 		if room_polygon.contains_point(left):
 			offset = (left.x - ctr.x, left.y - ctr.y)
 		if room_polygon.contains_point(right):
@@ -277,11 +284,12 @@ def generate_all_outlets(nec_walls, room_polygon):
 		end_pos = int(line.length + 1) - int(_OUTLET_WIDTH/2) - _OUTLET_WALL_BUFFER
 		for i in range(start_pos, end_pos, _OUTLET_POS_DIFF):
 			outlets.append(generate_outlet(line.unproject_2d(i-_OUTLET_WIDTH/2), line.unproject_2d(i+_OUTLET_WIDTH/2), offset))
-
 	return outlets
 
 def outlet_placement_options(nec_walls, room_polygon, blocking_polygons):
-	# optimize to only check blockers near the wall
+	""" Select valid positions of outlets, comparing against blocking elements like pucks.
+	"""
+	# Optimize to only check blockers near the wall
 	_MAX_DIST_FROM_WALL = _OUTLET_WIDTH * 2
 	wall_blocks = []
 	for block in blocking_polygons:
@@ -289,9 +297,9 @@ def outlet_placement_options(nec_walls, room_polygon, blocking_polygons):
 	 	if wall_dist <= _MAX_DIST_FROM_WALL:
 	 		wall_blocks.append(block)
 
-	# generate all possible outlets, then remove any that blocks key features like pucks
-	outlets = generate_all_outlets(nec_walls, room_polygon)
-	valid_outlets = []
+	# Generate possible outlets then remove any that blocks key features like pucks
+	# (#blocks) x (#outlets) x (intersection calculation) process, may consider future optimizations
+	outlets, valid_outlets = generate_all_outlets(nec_walls, room_polygon), []
 	for outlet in outlets:
 		blocked_puck = False
 		for block in wall_blocks:
@@ -300,10 +308,11 @@ def outlet_placement_options(nec_walls, room_polygon, blocking_polygons):
 				break
 		if not blocked_puck:
 			valid_outlets.append(outlet)
-
 	return valid_outlets
 
 def get_valid_outlet_placements(room, nec_walls):
+	""" Helper to load blockers and then find valid outlet placement options. """
+
 	# load up blockers, e.g. pucks and windows, with some extra padding
 	blockers = read_data_as_polygons(_FLOOR_INFO_FILE, 'pucks') + read_data_as_polygons(_STUDIO_INFO_FILE, 'windows') + read_data_as_polygons(_STUDIO_INFO_FILE, 'doors')
 	_BLOCKER_PADDING = 0.1
@@ -317,12 +326,11 @@ def get_valid_outlet_placements(room, nec_walls):
 # ==============================================================
 
 def basic_greedy_walk(start_val, end_val, valid_options):
-	recommendations = []
-
-	# first time from wall is just the outlet distance
-	max_walk_dist = _NEC_OUTLET_DISTANCE
-
-	walk_pos = start_val
+	""" Very simple greedy based 1D traversal approach based on walking NEC specs.
+		First outlet is 6 ft away, then subsequent outlets are 12 ft apart.
+	"""
+	recommendations, walk_pos = [], start_val
+	max_walk_dist = _NEC_OUTLET_DISTANCE # first outlet from wall is the NEC max outlet distance
 	while walk_pos < (end_val - _NEC_OUTLET_DISTANCE) or ((end_val - start_val) < _NEC_OUTLET_DISTANCE and walk_pos < (end_val - _NEC_WALL_MIN_LEN)):
 		possible = [op for op in valid_options if op[1] > walk_pos and op[1] < min(end_val, (walk_pos + max_walk_dist))]
 
@@ -336,12 +344,15 @@ def basic_greedy_walk(start_val, end_val, valid_options):
 		else:
 			# circumstance where pucks/windows/etc block the first set of possible outlets
 			# which likely violates NEC but we try to handle it anyway in most cases
-			# should throw a visual warning for the user
+			# should probably throw a visual warning for the user
 			walk_pos += 1
 
 	return recommendations
 
 def try_smoother_distribution(reccs, start_val, valid_options):
+	""" Polynominal smoothing for wall sections with multiple outlets
+		to try to better distribute their relative positioning over 1D space.
+	"""
 	if len(reccs) > 3:
 		try:
 			# polynomial fitting to smooth deltas between outlets
@@ -369,21 +380,22 @@ def try_smoother_distribution(reccs, start_val, valid_options):
 
 def main():
 	outlets_recommendations = []
-	rooms = [RoomPolygon([Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))]) for r in read_data(_STUDIO_INFO_FILE, 'generic_rooms')]
 
+	# Load in rooms as custom objects to support 1D-2D projection approach
+	rooms = [RoomPolygon([Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))]) for r in read_data(_STUDIO_INFO_FILE, 'generic_rooms')]
 	for room in rooms:
-		# project room into 1D, then perform cuts based on nonwall categories to splice room into 1D NEC wall segments
+		# Project room into 1D, then perform cuts based on nonwall categories to splice room into 1D NEC wall segments
 		wall_cuts_1d = get_wall_cuts_1d(room, _NONWALL_CATEGORIES)
 		nec_walls_1d = get_walls_1d(room, wall_cuts_1d)
 
-		# then unproject back to 2D room space
+		# Then unproject back to 2D room space
 		nec_walls = nec_walls_2d(room, nec_walls_1d)
 
 		# get valid outlet 2D placements then get 1D projection mappings
 		valid_placements = get_valid_outlet_placements(room, nec_walls)
 		projected_options = sorted([(vp, room.project_1d(vp.wall_pt)) for vp in valid_placements], key=lambda x: x[1])
 
-		# finalize recommendations for outlets
+		# Finalize recommendations for outlets
 		for nw in nec_walls:
 			start_val, end_val = room.project_1d(nw[0].p1), room.project_1d(nw[-1].p2)
 			if start_val < end_val:
@@ -393,12 +405,13 @@ def main():
 				valid_options = [(op[0], op[1] + room.total_len) for op in projected_options if op[1] <= end_val] + [op for op in projected_options if op[1] >= start_val]
 				end_val = end_val + room.total_len
 
+			# First run a greedy approach and then smooth the results
 			recommendations = basic_greedy_walk(start_val, end_val, valid_options)
 			recommendations = try_smoother_distribution(recommendations, start_val, valid_options)
 			outlets_recommendations += [r[0] for r in recommendations]
 
 	# save out data to visualize
-	save_data('json/studio_info.json', 'json/output_info.json', {'outlets':[vp.data_3d() for vp in outlets_recommendations]})
+	save_data('json/join_info.json', 'json/output_info.json', {'outlets':[vp.data_3d() for vp in outlets_recommendations]})
 
 if __name__ == '__main__':
 	main()
