@@ -31,17 +31,13 @@ _FLOOR_INFO_FILE = 'json/floor_info.json'
 
 # ==============================================================
 # ==============================================================
-# Helpers
+# Helpers, I/O
 # ==============================================================
 
-def dist(p1, p2):
-	return np.linalg.norm(np.array(p1[:2])-np.array(p2[:2]))
-
-# helper to compare two almost similar values
 def same(a, b):
+	# Compares two almost similar values
 	return abs(a - b) < _ERROR_THRES
 
-# I/O helpers
 def read_data(filepath, key):
 	with open(filepath, 'r') as f:
 		data = json.load(f)
@@ -65,123 +61,87 @@ def save_data(base_fp, output_fp, new_data):
 # Classes
 # ==============================================================
 
-class Line:
-	# represents a line defined by 2 points
-    def __init__(self, p1, p2):
-    	self.p1 = p1
-    	self.p2 = p2
-    	self._slope = None
+class Line(LineString):
+	""" Wrapper for LineString to represents a line defined by 2 points
+		Includes support for 1D projection approach
+	"""
+	def __init__(self, pts):
+		super(Line, self).__init__(pts)
+		self.p1 = Point(pts[0])
+		self.p2 = Point(pts[1])
 
-    def __repr__(self):
-    	return '[%.5f, %.5f, 0.0], [%.5f, %.5f, 0.0]' % (self.p1[0], self.p1[1], self.p2[0], self.p2[1])
+	def contains_point(self, pt):
+		return self.distance(Point(pt)) < _ERROR_THRES
 
-    def slope(self):
-    	if self._slope:
-    		return self._slope # cache
+	def unproject_2d(self, val):
+		""" Unprojects a float into its 2D room space mapping on line, assuming relative value. """
+		per_len = val / self.length
+		x = self.p1.x * (1 - per_len) + self.p2.x * (per_len)
+		y = self.p1.y * (1 - per_len) + self.p2.y * (per_len)
+		return (x, y)
 
-    	if same(self.p2[0], self.p1[0]):
-    		self._slope = np.inf
-        else:
-        	m = (self.p2[1] - self.p1[1]) / (self.p2[0] - self.p1[0])
-        	self._slope = m if m >= _ERROR_THRES else 0
-
-        return self._slope
-
-    def length(self):
-    	return dist(self.p1, self.p2)
-
-    def isvert(self):
-    	return np.isinf(self.slope())
-
-    def ishorz(self):
-    	return abs(self.slope()) < _ERROR_THRES
-
-    def center(self):
-    	return ((self.p1[0] + self.p2[0])/2, (self.p1[1] + self.p2[1])/2)
-
-    def contains_point(self, pt):
-		if self.isvert() and same(pt[0], self.p1[0]):
-			if pt[1] >= min(self.p1[1], self.p2[1]) and pt[1] <= max(self.p1[1], self.p2[1]):
-				return True
-
-		if self.ishorz() and same(pt[1], self.p1[1]):
-			if pt[0] >= min(self.p1[0], self.p2[0]) and pt[0] <= max(self.p1[0], self.p2[0]):
-				return True
-
-		# todo diagonal lines
-		return False
-
-    def astuple(self):
-		return (self.p1, self.p2)
-
-    def unproject_2d(self, val):
-		per_len = val / self.length()
-		x = self.p1[0] * (1 - per_len) + self.p2[0] * (per_len)
-		y = self.p1[1] * (1 - per_len) + self.p2[1] * (per_len)
-		return (x,y)
-
-    def overlaps(self, line):
-    	if self.isvert() and line.isvert() and same(self.p1[0], line.p1[0]):
-    		miny = min(self.p1[1], self.p2[1])
-    		maxy = max(self.p1[1],self.p2[1])
-    		return (line.p1[1] >= miny and line.p1[1] <= maxy) or (line.p2[1] >= miny and line.p2[1] <= maxy)
-
-    	if self.ishorz() and line.ishorz() and same(self.p1[1], line.p1[1]):
-    		minx = min(self.p1[0], self.p2[0])
-    		maxx = max(self.p1[0],self.p2[0])
-    		return (line.p1[0] >= minx and line.p1[0] <= maxx) or (line.p2[0] >= minx and line.p2[0] <= maxx)
-
-    	# todo diagonal lines
-    	return False
+	def overlaps(self, line):
+		""" Checks whether we contain another line. """
+		return self.contains_point(line.p1) and self.contains_point(line.p2)
 
 class Wall():
-	"""helper to manage each ordered line segment representing a wall of the room"""
+	""" Container to manage ordered line segment representing a wall of the room
+		Includes support for 1D projection approach
+		Attributes:
+			line (Line)
+			starting_len (float): 1D projection value for first vertex.
+			total_len (float): 1D projection value for second vertex.
+	"""
 	def __init__(self, line, starting_len):
 		self.line = line
 		self.starting_len = starting_len
-		self.total_len = starting_len + line.length()
+		self.total_len = starting_len + line.length
 
 	def contains_point(self, pt):
 		return self.line.contains_point(pt)
 
 	def project_1d(self, pt):
+		""" Projects a 2D room position into its 1D value on the wall, relative to our starting value. """
 		if self.contains_point(pt):
-			return self.starting_len + dist(self.line.p1, pt)
+			return self.starting_len + self.line.p1.distance(Point(pt))
 		return -1
 
 	def unproject_2d(self, val):
+		""" Unprojects a float into its 2D room space mapping, correcting for our starting value. """
 		return self.line.unproject_2d(val - self.starting_len)
 
-	def overlaps(self, line):
-		return self.line.overlaps(line)
-
 class RoomPolygon:
-	"""represents the wall enclosing a room"""
+	""" Represents the wall enclosing a generic room
+		Includes support for 1D projection approach
+		Attributes:
+			walls (list of Wall)
+			total_len (float): 1D projection value, total length of walls.
+			polygon (Polygon): Polygon reference for convenience.
+	"""
 	def __init__(self, lines):
-
-		# create an ordered series of line segments
+		# Init with an ordered series of line segments
 		self.walls = []
 		total_len = 0
 		for line in lines:
 			next_segment = Wall(line, total_len)
 			total_len = next_segment.total_len
 			self.walls.append(next_segment)
-		self.total_len = total_len
 
-		# polygon ref
-		self.polygon = Polygon([(p.p1[0],p.p1[1]) for p in lines])
+		self.total_len = total_len
+		self.polygon = Polygon([p.p1 for p in lines])
 
 	def unproject_2d(self, val):
+		""" Unprojects a float into its 2D room space mapping. """
 		for wall in self.walls:
 			if val >= wall.starting_len and val <= wall.total_len:
 				return wall.unproject_2d(val)
 		return None
 
 	def unproject_dist_2d(self, start_val, end_val):
-		lines = []
-
-		is_appending = False
-		p1, p2 = None, None
+		""" Unprojects a range represented by floats into a set of ordered lines.
+			Handles case which range extends across corners, covering multiple walls.
+		"""
+		lines, is_appending, p1, p2 = [], False, None, None
 		for wall in self.walls:
 			if not is_appending:
 				# trying to find the edge that contains starting value
@@ -191,34 +151,36 @@ class RoomPolygon:
 					# is the end point also on the same edge?
 					if end_val >= wall.starting_len and end_val <= wall.total_len:
 						p2 = wall.unproject_2d(end_val)
-						return [Line(p1, p2)] # case that edge contains both start and end
+						return [Line([p1, p2])] # case that edge contains both start and end
 					else:
-						lines.append(Line(p1, wall.line.p2)) # otherwise, we create segments
+						lines.append(Line([p1, wall.line.p2])) # otherwise, we create segments
 						is_appending = True
 			else:
 				# trying to find the edge that contains end value
 				if end_val >= wall.starting_len and end_val <= wall.total_len:
 					p2 = wall.unproject_2d(end_val)
-					lines.append(Line(wall.line.p1, p2))
+					lines.append(Line([wall.line.p1, p2]))
 					return lines
 				else:
-					lines.append(Line(wall.line.p1, wall.line.p2)) # otherwise, keep creating segments
-
+					lines.append(Line([wall.line.p1, wall.line.p2])) # otherwise, keep creating segments
 		return lines
 
 	def project_1d(self, pt):
+		""" Projects a 2D room position into its 1D value on the wall, if possible. """
 		for wall in self.walls:
 			if wall.contains_point(pt):
 				return wall.project_1d(pt)
 		return -1
 
 	def overlaps(self, line):
+		""" Checks if a line is on the wall, typically used for checking wall-flushed objects. """
 		for wall in self.walls:
-			if wall.overlaps(line):
+			if wall.line.overlaps(line):
 				return True
 
 	def contains_point(self, pt):
-		return self.polygon.contains(Point(pt[0], pt[1]))
+		""" Checks if a point is inside the room, primarily for directional offset to position new outlets. """
+		return self.polygon.contains(pt)
 
 class Outlet:
 	""" Represents an outlet flushed against the wall.
@@ -244,7 +206,7 @@ class Outlet:
 def get_wall_cuts_1d(room, categories_to_check):
 	wall_cuts_1d = []
 	for check in categories_to_check:
-		shapes = [[Line(r[i], r[(i+1) % len(r)]) for i in range(len(r))] for r in read_data(_STUDIO_INFO_FILE, check)]
+		shapes = [[Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))] for r in read_data(_STUDIO_INFO_FILE, check)]
 		for shape in shapes:
 			for l in shape:
 				if room.overlaps(l):
@@ -290,7 +252,7 @@ def nec_walls_2d(room, walls_1d):
 def generate_outlet(p1, p2, offset):
 	wall_pt = ((p1[0]+p2[0])/2, (p1[1]+p2[1])/2)
 	vertices = [p1, p2, (p2[0] + offset[0], p2[1] + offset[1]), (p1[0] + offset[0], p1[1] + offset[1])]
-	return Outlet(wall_pt, vertices) #[Line(corners[i], corners[(i+1)%len(corners)]) for i in range(len(corners))]
+	return Outlet(wall_pt, vertices)
 
 def generate_all_outlets(nec_walls, room_polygon):
 	nec_lines = [line for wall in nec_walls for line in wall] # flatten
@@ -299,18 +261,20 @@ def generate_all_outlets(nec_walls, room_polygon):
 	for line in nec_lines:
 
 		# get outlet offset when flushed to wall
-		ctr, offset = line.center(), (0,0)
-		if line.ishorz():
-			offset = (0, _OUTLET_DEPTH) if room_polygon.contains_point((ctr[0], ctr[1]+_OUTLET_DEPTH)) else (0, -_OUTLET_DEPTH)
-		if line.isvert():
-			offset = (_OUTLET_DEPTH, 0) if room_polygon.contains_point((ctr[0]+_OUTLET_DEPTH, ctr[1])) else (-_OUTLET_DEPTH, 0)
+		ctr, offset = line.centroid, (0,0)
 
-		# TODO diagonal walls
+		left = line.parallel_offset(_OUTLET_DEPTH, 'left').centroid
+		right = line.parallel_offset(_OUTLET_DEPTH, 'right').centroid
+
+		if room_polygon.contains_point(left):
+			offset = (left.x - ctr.x, left.y - ctr.y)
+		if room_polygon.contains_point(right):
+			offset = (right.x - ctr.x, right.y - ctr.y)
 
 		# generate all possible outlets along the wall, each with X inch difference
 		_OUTLET_POS_DIFF = 2
 		start_pos = _OUTLET_WALL_BUFFER + int(_OUTLET_WIDTH/2)
-		end_pos = int(line.length() + 1) - int(_OUTLET_WIDTH/2) - _OUTLET_WALL_BUFFER
+		end_pos = int(line.length + 1) - int(_OUTLET_WIDTH/2) - _OUTLET_WALL_BUFFER
 		for i in range(start_pos, end_pos, _OUTLET_POS_DIFF):
 			outlets.append(generate_outlet(line.unproject_2d(i-_OUTLET_WIDTH/2), line.unproject_2d(i+_OUTLET_WIDTH/2), offset))
 
@@ -405,7 +369,7 @@ def try_smoother_distribution(reccs, start_val, valid_options):
 
 def main():
 	outlets_recommendations = []
-	rooms = [RoomPolygon([Line(r[i], r[(i+1) % len(r)]) for i in range(len(r))]) for r in read_data(_STUDIO_INFO_FILE, 'generic_rooms')]
+	rooms = [RoomPolygon([Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))]) for r in read_data(_STUDIO_INFO_FILE, 'generic_rooms')]
 
 	for room in rooms:
 		# project room into 1D, then perform cuts based on nonwall categories to splice room into 1D NEC wall segments
