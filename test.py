@@ -353,23 +353,30 @@ def try_smoother_distribution(reccs, start_val, valid_options):
 		to try to better distribute their relative positioning over 1D space.
 	"""
 	if len(reccs) > 3:
-		try:
-			# polynomial fitting to smooth deltas between outlets
-			delta = [reccs[0][1]-start_val] + [(reccs[i+1][1]-reccs[i][1]) for i in range(len(reccs)-1)]
-			poly = np.polyfit(range(len(reccs)), delta, 4)
-			smooth = np.poly1d(poly)(range(len(reccs)))
 
-			# target values we're trying for, but may not get
-			targets = np.cumsum(smooth) + start_val
+		# polynomial fitting to smooth deltas between outlets
+		delta = [reccs[0][1]-start_val] + [(reccs[i+1][1]-reccs[i][1]) for i in range(len(reccs)-1)]
+		poly = np.polyfit(range(len(reccs)), delta, 4)
+		smooth = np.poly1d(poly)(range(len(reccs)))
 
-			recommendations = []
-			for t in targets:
-				ideal = sorted([(op, abs(op[1]-t)) for op in valid_options], key=lambda x: x[1])[0][0]
-				recommendations.append(ideal)
-				valid_options.remove(ideal)
-			return recommendations
-		except:
-			pass
+		# target values we're trying for, but may not get
+		targets = np.cumsum(smooth) + start_val
+
+		recommendations = []
+		for t in targets:
+			ideal = sorted([(op, abs(op[1]-t)) for op in valid_options], key=lambda x: x[1])[0][0]
+			recommendations.append(ideal)
+			valid_options.remove(ideal)
+
+		print len(recommendations)
+		print [recommendations[i+1][1]-recommendations[i][1] for i in range(len(recommendations)-1)]
+
+		return recommendations
+
+	if len(reccs) > 1:
+		print [recommendations[i+1][1]-recommendations[i][1] for i in range(len(recommendations)-1)]
+	else:
+		print reccs[0][1]
 	return reccs
 
 # ==============================================================
@@ -382,6 +389,7 @@ def main():
 
 	# Load in rooms as custom objects to support 1D-2D projection approach
 	rooms = [RoomPolygon([Line([r[i][:2], r[(i+1) % len(r)][:2]]) for i in range(len(r))]) for r in read_data(_STUDIO_INFO_FILE, 'generic_rooms')]
+
 	for room in rooms:
 		# Project room into 1D, then perform cuts based on nonwall categories to splice room into 1D NEC wall segments
 		wall_cuts_1d = get_wall_cuts_1d(room, _NONWALL_CATEGORIES)
@@ -408,6 +416,12 @@ def main():
 			recommendations = basic_greedy_walk(start_val, end_val, valid_options)
 			recommendations = try_smoother_distribution(recommendations, start_val, valid_options)
 			outlets_recommendations += [r[0] for r in recommendations]
+
+	for n in nec_walls:
+		print n[0].p1.coords.xy, n[0].p2.coords.xy, n[0].length
+		print n[-1].p1.coords.xy, n[-1].p2.coords.xy, n[-1].length
+		print
+	print [Point(outlets_recommendations[i].wall_pt).distance(Point(outlets_recommendations[i+1].wall_pt)) for i in range(len(outlets_recommendations)-1)]
 
 	# save out data to visualize
 	save_data('json/join_info.json', 'json/output_info.json', {'outlets':[vp.data_3d() for vp in outlets_recommendations]})

@@ -296,7 +296,7 @@ def get_valid_outlet_placements(room, room_info, floor_info, nec_walls):
 
     # Load up blockers, e.g. pucks and windows, with some extra padding
     blockers = [Polygon(p) for p in floor_info['pucks']] + [Polygon(p) for p in room_info['windows']] + [Polygon(p) for p in room_info['doors']]
-    _BLOCKER_PADDING = 0.4
+    _BLOCKER_PADDING = 0.1
     blockers = [affinity.scale(b, 1+_BLOCKER_PADDING, 1+_BLOCKER_PADDING) for b in blockers]
 
     return outlet_placement_options(nec_walls, room, blockers)
@@ -389,7 +389,7 @@ def place_outlets(studio, floors):
             # First run a greedy approach and then smooth the results
             recommendations = basic_greedy_walk(start_val, end_val, valid_options)
             recommendations = try_smoother_distribution(recommendations, start_val, valid_options)
-            outlets += [[r[0].data_3d() for r in recommendations]]
+            outlets += [r[0].data_3d() for r in recommendations]
     return outlets
 
 def main():

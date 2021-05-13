@@ -38,4 +38,4 @@ I took about 2 days which covers roughly 3-4ish hours per day, including breaks 
 * Anything else you'd like us to know (about your implementation or otherwise)?
 * How did you find the test overall? Did you have any issues or have difficulties completing? If you have any suggestions on how we can improve the test, we'd love to hear them.
 
-It was very fun! :)
+It was very fun! The diagrams were especially helpful :)
